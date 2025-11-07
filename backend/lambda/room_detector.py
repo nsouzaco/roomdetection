@@ -293,6 +293,59 @@ def detect_rooms(image_bytes: bytes) -> Dict[str, Any]:
     }
 
 
+def parse_multipart(body: str, content_type: str) -> bytes:
+    """
+    Parse multipart/form-data to extract file bytes
+    
+    Args:
+        body: Request body as string
+        content_type: Content-Type header value
+        
+    Returns:
+        File bytes
+    """
+    # Extract boundary from content type
+    boundary = None
+    for part in content_type.split(';'):
+        part = part.strip()
+        if part.startswith('boundary='):
+            boundary = part.split('=', 1)[1].strip('"')
+            break
+    
+    if not boundary:
+        raise ValueError("No boundary found in content-type")
+    
+    logger.info(f"Parsing multipart with boundary: {boundary}")
+    
+    # Split body by boundary
+    parts = body.split(f'--{boundary}')
+    
+    # Find the file part
+    for part in parts:
+        if not part or part.strip() == '--':
+            continue
+        
+        # Split headers from content
+        if '\r\n\r\n' in part:
+            headers, content = part.split('\r\n\r\n', 1)
+        elif '\n\n' in part:
+            headers, content = part.split('\n\n', 1)
+        else:
+            continue
+        
+        # Check if this part contains a file
+        if 'Content-Disposition' in headers and 'filename' in headers:
+            # Remove trailing boundary markers
+            content = content.split(f'--{boundary}')[0]
+            # Remove trailing newlines
+            content = content.rstrip('\r\n-')
+            
+            logger.info(f"Found file part, content length: {len(content)} bytes")
+            return content.encode('latin-1')  # Preserve binary data
+    
+    raise ValueError("No file found in multipart data")
+
+
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
     AWS Lambda handler function
@@ -309,15 +362,30 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         
         # Parse request body
         body = event.get('body', '')
+        headers = event.get('headers', {})
+        
+        # Get content type (handle case-insensitive headers)
+        content_type = None
+        for key, value in headers.items():
+            if key.lower() == 'content-type':
+                content_type = value
+                break
+        
+        logger.info(f"Content-Type: {content_type}")
+        logger.info(f"Is Base64 Encoded: {event.get('isBase64Encoded', False)}")
+        logger.info(f"Body length: {len(body)} bytes")
         
         # Handle base64 encoding from API Gateway
         is_base64 = event.get('isBase64Encoded', False)
         if is_base64:
-            image_bytes = base64.b64decode(body)
+            body = base64.b64decode(body).decode('latin-1')
+        
+        # Parse multipart/form-data
+        if content_type and 'multipart/form-data' in content_type:
+            image_bytes = parse_multipart(body, content_type)
         else:
-            # Assume multipart/form-data (simplified for now)
-            # In production, properly parse multipart data
-            image_bytes = body.encode() if isinstance(body, str) else body
+            # Fallback: assume body is raw image bytes
+            image_bytes = body.encode('latin-1') if isinstance(body, str) else body
         
         # Detect rooms
         result = detect_rooms(image_bytes)
