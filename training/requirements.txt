@@ -1,0 +1,17 @@
+# YOLOv8 Training Dependencies
+
+# Core
+ultralytics>=8.0.0
+
+# Dataset handling  
+albumentations>=1.3.0
+
+# Utilities
+tqdm>=4.66.0
+pandas>=2.0.0
+matplotlib>=3.7.0
+seaborn>=0.12.0
+
+# Note: roboflow omitted due to dependency issues on Python 3.14
+# Install manually if needed: pip install roboflow
+

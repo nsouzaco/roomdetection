@@ -1,0 +1,41 @@
+# Python
+venv/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Training outputs
+room_detection/
+runs/
+*.pt
+*.pth
+*.onnx
+*.engine
+*.weights
+
+# Datasets (too large for git)
+datasets/*/
+!datasets/sample/.gitkeep
+!datasets/quick_test/.gitkeep
+
+# Logs
+*.log
+wandb/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# macOS
+.DS_Store
+._*
+
+# Models (upload separately)
+models/*.pt
+models/*.pth
+!models/README.md
+
