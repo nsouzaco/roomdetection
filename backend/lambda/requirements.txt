@@ -1,6 +1,8 @@
-# Python dependencies for Lambda function (Phase 1: OpenCV)
-opencv-python-headless==4.8.1.78
+# Python dependencies for Lambda function (Phase 2: YOLO)
+ultralytics==8.0.196
 numpy==1.24.3
 boto3==1.28.85
 pillow==10.1.0
+torch==2.1.0
+torchvision==0.16.0
 
