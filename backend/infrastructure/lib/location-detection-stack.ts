@@ -79,6 +79,7 @@ export class LocationDetectionStack extends cdk.Stack {
     const api = new apigateway.RestApi(this, 'LocationDetectionApi', {
       restApiName: 'Location Detection API',
       description: 'API for detecting room boundaries in blueprints',
+      binaryMediaTypes: ['multipart/form-data', 'image/*'], // Treat these as binary
       deployOptions: {
         stageName: 'prod',
         loggingLevel: apigateway.MethodLoggingLevel.INFO,
