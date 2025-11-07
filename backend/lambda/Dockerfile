@@ -5,9 +5,10 @@ FROM public.ecr.aws/lambda/python:3.11
 
 # Install system dependencies for PyTorch and OpenCV
 RUN yum install -y \
+    gcc \
+    gcc-c++ \
     libGL \
     libgomp \
-    libglib2.0-0 \
     && yum clean all
 
 # Copy requirements and install Python dependencies
