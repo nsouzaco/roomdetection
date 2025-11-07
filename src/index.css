@@ -1,21 +1,12 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
 
-@layer base {
-  body {
-    @apply bg-neutral-50 text-neutral-900 antialiased;
-  }
-  
-  * {
-    @apply border-neutral-200;
-  }
+body {
+  background-color: #f9fafb;
+  color: #111827;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-@layer components {
-  /* Custom component styles can go here */
-}
-
-@layer utilities {
-  /* Custom utility classes can go here */
+* {
+  border-color: #e5e7eb;
 }
