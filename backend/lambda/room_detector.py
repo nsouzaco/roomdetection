@@ -1,15 +1,15 @@
 """
-Room detection Lambda function - Phase 2: YOLO-based detection
-Detects room boundaries from architectural blueprints using YOLOv8
+Room detection Lambda function - Phase 1: OpenCV-based detection
+Detects room boundaries from architectural blueprints using traditional computer vision
 """
 import json
 import base64
 import logging
 from typing import List, Tuple, Dict, Any
+import cv2
 import numpy as np
 from io import BytesIO
 from PIL import Image
-import os
 
 # Configure logging
 logger = logging.getLogger()
@@ -17,31 +17,316 @@ logger.setLevel(logging.INFO)
 
 # Constants
 NORMALIZED_RANGE = 1000
-MODEL_PATH = os.path.join(os.path.dirname(__file__), 'yolov8_room_detector.pt')
+MIN_ROOM_AREA = 5000  # Minimum area in pixels to be considered a room
+MAX_ROOM_AREA = 500000  # Maximum area to filter out full-blueprint detections
+CONFIDENCE_BASE = 0.7  # Base confidence for OpenCV detections
 
-# Initialize YOLO model (loaded once per Lambda container)
-_model = None
 
-def get_model():
+def preprocess_image(image: np.ndarray) -> np.ndarray:
     """
-    Get or initialize the YOLO model
-    Uses lazy loading to improve Lambda cold start times
+    Preprocess blueprint image for better edge detection
+    
+    Args:
+        image: Input image as numpy array
+        
+    Returns:
+        Preprocessed grayscale image
     """
-    global _model
-    if _model is None:
-        from ultralytics import YOLO
-        logger.info(f"Loading YOLO model from {MODEL_PATH}")
-        _model = YOLO(MODEL_PATH)
-        logger.info("YOLO model loaded successfully")
-    return _model
+    # Convert to grayscale if needed
+    if len(image.shape) == 3:
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    else:
+        gray = image
+    
+    # Apply CLAHE (Contrast Limited Adaptive Histogram Equalization)
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+    enhanced = clahe.apply(gray)
+    
+    # Apply Gaussian blur to reduce noise
+    blurred = cv2.GaussianBlur(enhanced, (5, 5), 0)
+    
+    return blurred
 
 
-# All OpenCV helper functions removed - using YOLO now!
+def detect_edges(image: np.ndarray) -> np.ndarray:
+    """
+    Detect edges using Canny edge detector
+    
+    Args:
+        image: Preprocessed grayscale image
+        
+    Returns:
+        Binary edge image
+    """
+    # Use fixed thresholds that work well for most floor plans
+    # Lower threshold: 50 (detects weaker edges)
+    # Upper threshold: 150 (strong edges)
+    edges = cv2.Canny(image, 50, 150)
+    
+    logger.info(f"Edge detection complete, edge pixels: {np.count_nonzero(edges)}")
+    
+    # Apply morphological operations to close gaps and strengthen edges
+    kernel = np.ones((5, 5), np.uint8)
+    
+    # Dilate to connect nearby edges (important for room boundaries)
+    edges = cv2.dilate(edges, kernel, iterations=2)
+    
+    # Erode to thin the edges back
+    edges = cv2.erode(edges, kernel, iterations=1)
+    
+    # Close small holes in the edges
+    edges = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, kernel)
+    
+    return edges
+
+
+def find_room_contours(edges: np.ndarray, original_shape: Tuple[int, int]) -> List[np.ndarray]:
+    """
+    Find room contours from edge image
+    
+    Args:
+        edges: Binary edge image
+        original_shape: Original image shape (height, width)
+        
+    Returns:
+        List of valid room contours
+    """
+    # Find all contours (not just external ones)
+    # This is important for colored floor plans where rooms are filled regions
+    contours, hierarchy = cv2.findContours(edges, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    
+    logger.info(f"Found {len(contours)} total contours before filtering")
+    
+    # Filter contours by area
+    valid_contours = []
+    height, width = original_shape
+    image_area = height * width
+    
+    # Calculate dynamic area thresholds based on image size
+    # For a 3000x3000 image, min_area = 50,000 (about 224x224px)
+    # This scales with image size
+    min_area = max(MIN_ROOM_AREA, image_area * 0.005)  # At least 0.5% of image
+    max_area = min(MAX_ROOM_AREA, image_area * 0.4)    # At most 40% of image
+    
+    logger.info(f"Area thresholds: min={min_area:.0f}, max={max_area:.0f}, image_area={image_area}")
+    
+    for idx, contour in enumerate(contours):
+        area = cv2.contourArea(contour)
+        
+        # Filter by area constraints
+        if min_area < area < max_area:
+            # Approximate contour to reduce vertices
+            epsilon = 0.02 * cv2.arcLength(contour, True)
+            approx = cv2.approxPolyDP(contour, epsilon, True)
+            
+            # Log the contour for debugging
+            logger.info(f"Valid contour {idx}: area={area:.0f}, vertices={len(approx)}")
+            valid_contours.append(approx)
+    
+    logger.info(f"Filtered to {len(valid_contours)} valid contours")
+    return valid_contours
+
+
+def contour_to_bounding_box(contour: np.ndarray) -> Tuple[int, int, int, int]:
+    """
+    Convert contour to bounding box
+    
+    Args:
+        contour: Contour as numpy array
+        
+    Returns:
+        Tuple of (x_min, y_min, x_max, y_max)
+    """
+    x, y, w, h = cv2.boundingRect(contour)
+    return (x, y, x + w, y + h)
+
+
+def calculate_confidence(contour: np.ndarray, edges: np.ndarray) -> float:
+    """
+    Calculate detection confidence based on contour properties
+    
+    Args:
+        contour: Detected contour
+        edges: Edge image
+        
+    Returns:
+        Confidence score (0-1)
+    """
+    # Start with base confidence
+    confidence = 0.5
+    
+    # Get contour properties
+    area = cv2.contourArea(contour)
+    perimeter = cv2.arcLength(contour, True)
+    x, y, w, h = cv2.boundingRect(contour)
+    bounding_box_area = w * h
+    
+    # Approximate contour to polygon
+    epsilon = 0.02 * perimeter
+    approx = cv2.approxPolyDP(contour, epsilon, True)
+    num_vertices = len(approx)
+    
+    # Initialize metrics
+    extent = 0.0
+    solidity = 0.0
+    aspect_ratio = 1.0
+    
+    # 1. Shape Quality (0-0.25)
+    # Rooms should fill their bounding box well
+    if bounding_box_area > 0:
+        extent = area / bounding_box_area
+        # Extent close to 1.0 means rectangular, close to 0 means irregular
+        if extent > 0.85:  # Very rectangular
+            confidence += 0.25
+        elif extent > 0.70:  # Fairly rectangular
+            confidence += 0.20
+        elif extent > 0.55:  # Somewhat rectangular
+            confidence += 0.15
+        else:
+            confidence += 0.05
+    
+    # 2. Convexity (0-0.15)
+    # Rooms should be mostly convex (no major indentations)
+    hull = cv2.convexHull(contour)
+    hull_area = cv2.contourArea(hull)
+    if hull_area > 0:
+        solidity = area / hull_area
+        if solidity > 0.95:  # Very convex
+            confidence += 0.15
+        elif solidity > 0.85:  # Mostly convex
+            confidence += 0.10
+        else:
+            confidence += 0.05
+    
+    # 3. Vertex Count (0-0.15)
+    # Rooms typically have 4-8 vertices
+    if num_vertices == 4:  # Perfect rectangle
+        confidence += 0.15
+    elif 5 <= num_vertices <= 8:  # Near-rectangular
+        confidence += 0.12
+    elif 9 <= num_vertices <= 12:  # Complex but valid
+        confidence += 0.08
+    else:
+        confidence += 0.03
+    
+    # 4. Aspect Ratio (0-0.10)
+    # Rooms should not be extremely elongated
+    if w > 0 and h > 0:
+        aspect_ratio = max(w, h) / min(w, h)
+        if aspect_ratio < 2.0:  # Nearly square
+            confidence += 0.10
+        elif aspect_ratio < 3.0:  # Reasonable rectangle
+            confidence += 0.07
+        elif aspect_ratio < 4.0:  # Long room
+            confidence += 0.04
+        else:  # Very elongated
+            confidence += 0.02
+    
+    # 5. Size Reasonableness (0-0.10)
+    # Penalize very small or very large rooms
+    if 100000 < area < 400000:  # Typical room size for 3000x3000 image
+        confidence += 0.10
+    elif 50000 < area < 500000:  # Acceptable range
+        confidence += 0.07
+    else:
+        confidence += 0.03
+    
+    # Log confidence breakdown for debugging
+    logger.info(f"Confidence breakdown - Area: {area:.0f}, Extent: {extent:.2f}, "
+                f"Solidity: {solidity:.2f}, Vertices: {num_vertices}, "
+                f"Aspect: {aspect_ratio:.2f}, Final: {confidence:.2f}")
+    
+    # Cap between 0.5 and 0.95 for OpenCV-based detection
+    return max(0.5, min(confidence, 0.95))
+
+
+def normalize_coordinates(
+    bbox: Tuple[int, int, int, int], 
+    image_shape: Tuple[int, int]
+) -> List[int]:
+    """
+    Normalize bounding box coordinates to 0-1000 range
+    
+    Args:
+        bbox: Bounding box (x_min, y_min, x_max, y_max)
+        image_shape: Image shape (height, width)
+        
+    Returns:
+        Normalized coordinates [x_min, y_min, x_max, y_max]
+    """
+    height, width = image_shape
+    x_min, y_min, x_max, y_max = bbox
+    
+    return [
+        int((x_min / width) * NORMALIZED_RANGE),
+        int((y_min / height) * NORMALIZED_RANGE),
+        int((x_max / width) * NORMALIZED_RANGE),
+        int((y_max / height) * NORMALIZED_RANGE),
+    ]
+
+
+def merge_overlapping_boxes(
+    boxes: List[Dict[str, Any]], 
+    iou_threshold: float = 0.3
+) -> List[Dict[str, Any]]:
+    """
+    Merge overlapping bounding boxes
+    
+    Args:
+        boxes: List of detected rooms
+        iou_threshold: IoU threshold for merging
+        
+    Returns:
+        List of merged rooms
+    """
+    if len(boxes) <= 1:
+        return boxes
+    
+    # Sort by confidence (keep higher confidence boxes)
+    boxes = sorted(boxes, key=lambda x: x['confidence'], reverse=True)
+    
+    merged = []
+    used = set()
+    
+    for i, box1 in enumerate(boxes):
+        if i in used:
+            continue
+            
+        # Check for overlaps with remaining boxes
+        for j in range(i + 1, len(boxes)):
+            if j in used:
+                continue
+                
+            # Calculate IoU (Intersection over Union)
+            box2 = boxes[j]
+            x1_min, y1_min, x1_max, y1_max = box1['bounding_box']
+            x2_min, y2_min, x2_max, y2_max = box2['bounding_box']
+            
+            # Calculate intersection
+            x_inter_min = max(x1_min, x2_min)
+            y_inter_min = max(y1_min, y2_min)
+            x_inter_max = min(x1_max, x2_max)
+            y_inter_max = min(y1_max, y2_max)
+            
+            if x_inter_max > x_inter_min and y_inter_max > y_inter_min:
+                inter_area = (x_inter_max - x_inter_min) * (y_inter_max - y_inter_min)
+                box1_area = (x1_max - x1_min) * (y1_max - y1_min)
+                box2_area = (x2_max - x2_min) * (y2_max - y2_min)
+                union_area = box1_area + box2_area - inter_area
+                
+                iou = inter_area / union_area if union_area > 0 else 0
+                
+                if iou > iou_threshold:
+                    used.add(j)
+        
+        merged.append(box1)
+    
+    return merged
 
 
 def detect_rooms(image_bytes: bytes) -> Dict[str, Any]:
     """
-    Main room detection function using YOLOv8
+    Main room detection function
     
     Args:
         image_bytes: Blueprint image as bytes
@@ -58,50 +343,45 @@ def detect_rooms(image_bytes: bytes) -> Dict[str, Any]:
     
     logger.info(f"Image loaded: {image_array.shape}")
     
-    # Get YOLO model
-    model = get_model()
+    # Preprocess
+    preprocessed = preprocess_image(image_array)
     
-    # Run inference
-    logger.info("Running YOLO inference...")
-    results = model(image_array, verbose=False)[0]
+    # Detect edges
+    edges = detect_edges(preprocessed)
     
-    logger.info(f"YOLO found {len(results.boxes)} detections")
+    # Find contours
+    contours = find_room_contours(edges, preprocessed.shape)
+    logger.info(f"Found {len(contours)} potential rooms")
     
-    # Convert YOLO results to our format
+    # Convert to rooms
     rooms = []
-    height, width = image_array.shape[:2]
-    
-    for idx, box in enumerate(results.boxes):
-        # Get box coordinates (xyxy format)
-        x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
-        confidence = float(box.conf[0].cpu().numpy())
-        
-        # Normalize coordinates to 0-1000 range
-        normalized_bbox = [
-            int((x1 / width) * NORMALIZED_RANGE),
-            int((y1 / height) * NORMALIZED_RANGE),
-            int((x2 / width) * NORMALIZED_RANGE),
-            int((y2 / height) * NORMALIZED_RANGE),
-        ]
+    for idx, contour in enumerate(contours):
+        bbox = contour_to_bounding_box(contour)
+        confidence = calculate_confidence(contour, edges)
+        normalized_bbox = normalize_coordinates(bbox, preprocessed.shape)
         
         rooms.append({
             'id': f'room_{idx:03d}',
             'bounding_box': normalized_bbox,
             'confidence': round(confidence, 2),
-            'name_hint': None,  # Future: Add room type classification
+            'name_hint': None,  # Phase 2: Add name detection
         })
     
-    # Sort by confidence (highest first)
-    rooms.sort(key=lambda r: r['confidence'], reverse=True)
+    # Merge overlapping boxes
+    rooms = merge_overlapping_boxes(rooms)
+    
+    # Sort by size (larger rooms first)
+    rooms.sort(key=lambda r: (
+        (r['bounding_box'][2] - r['bounding_box'][0]) * 
+        (r['bounding_box'][3] - r['bounding_box'][1])
+    ), reverse=True)
     
     processing_time = int((time.time() - start_time) * 1000)
-    
-    logger.info(f"Detection complete: {len(rooms)} rooms found in {processing_time}ms")
     
     return {
         'rooms': rooms,
         'processing_time_ms': processing_time,
-        'model_version': 'phase_2_yolov8n',
+        'model_version': 'phase_1_opencv',
     }
 
 
