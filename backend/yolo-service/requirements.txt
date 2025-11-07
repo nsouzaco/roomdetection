@@ -1,0 +1,19 @@
+# YOLO Service Dependencies for ECS/Fargate
+
+# Web Framework
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+python-multipart==0.0.6
+
+# ML/AI
+ultralytics==8.0.196
+torch==2.1.0
+torchvision==0.16.0
+
+# Image Processing
+pillow==10.1.0
+numpy==1.24.3
+
+# Utilities
+python-json-logger==2.0.7
+

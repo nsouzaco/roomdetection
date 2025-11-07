@@ -7,9 +7,13 @@
     "watch": "tsc -w",
     "cdk": "cdk",
     "deploy": "cdk deploy",
+    "deploy:yolo": "cdk deploy --app 'npx ts-node bin/deploy-yolo.ts'",
     "synth": "cdk synth",
+    "synth:yolo": "cdk synth --app 'npx ts-node bin/deploy-yolo.ts'",
     "diff": "cdk diff",
-    "destroy": "cdk destroy"
+    "diff:yolo": "cdk diff --app 'npx ts-node bin/deploy-yolo.ts'",
+    "destroy": "cdk destroy",
+    "destroy:yolo": "cdk destroy --app 'npx ts-node bin/deploy-yolo.ts'"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",
