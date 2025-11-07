@@ -55,13 +55,13 @@ export const ProcessingStatus: React.FC<ProcessingStatusProps> = ({
   const config = getStatusConfig();
   const displayMessage = message || config.defaultMessage;
   
-  const colorClasses = {
+  const colorClasses: Record<string, string> = {
     primary: 'bg-primary-50 border-primary-200 text-primary-900',
     success: 'bg-success-50 border-success-200 text-success-900',
     error: 'bg-error-50 border-error-200 text-error-900',
   };
   
-  const iconColorClasses = {
+  const iconColorClasses: Record<string, string> = {
     primary: 'text-primary-600',
     success: 'text-success-600',
     error: 'text-error-600',

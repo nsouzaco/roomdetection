@@ -1,7 +1,7 @@
 /**
  * Main application component for Location Detection AI
  */
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { UploadZone } from './components/upload';
 import { BlueprintCanvas } from './components/canvas';
 import { Card, ProcessingStatus, ControlPanel } from './components/common';
@@ -17,7 +17,6 @@ function App() {
   const [rooms, setRooms] = useState<CanvasRoom[]>([]);
   const [selectedRoomId, setSelectedRoomId] = useState<string | undefined>();
   const [error, setError] = useState<AppError | null>(null);
-  const [blueprintDimensions, setBlueprintDimensions] = useState({ width: 1000, height: 1000 });
 
   const handleFileSelect = async (file: File) => {
     setError(null);
@@ -29,9 +28,6 @@ function App() {
     
     // Get image dimensions
     const img = new Image();
-    img.onload = () => {
-      setBlueprintDimensions({ width: img.width, height: img.height });
-    };
     img.src = url;
     
     // Start processing

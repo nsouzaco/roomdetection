@@ -67,24 +67,28 @@ export interface CanvasRoom extends Omit<DetectedRoom, 'bounding_box'> {
 /**
  * Processing status states
  */
-export enum ProcessingStatus {
-  IDLE = 'idle',
-  UPLOADING = 'uploading',
-  PROCESSING = 'processing',
-  SUCCESS = 'success',
-  ERROR = 'error',
-}
+export const ProcessingStatus = {
+  IDLE: 'idle',
+  UPLOADING: 'uploading',
+  PROCESSING: 'processing',
+  SUCCESS: 'success',
+  ERROR: 'error',
+} as const;
+
+export type ProcessingStatus = typeof ProcessingStatus[keyof typeof ProcessingStatus];
 
 /**
  * Error types
  */
-export enum ErrorType {
-  FILE_TOO_LARGE = 'file_too_large',
-  INVALID_FORMAT = 'invalid_format',
-  PROCESSING_FAILED = 'processing_failed',
-  NETWORK_ERROR = 'network_error',
-  UNKNOWN = 'unknown',
-}
+export const ErrorType = {
+  FILE_TOO_LARGE: 'file_too_large',
+  INVALID_FORMAT: 'invalid_format',
+  PROCESSING_FAILED: 'processing_failed',
+  NETWORK_ERROR: 'network_error',
+  UNKNOWN: 'unknown',
+} as const;
+
+export type ErrorType = typeof ErrorType[keyof typeof ErrorType];
 
 /**
  * Application error with user-friendly message
