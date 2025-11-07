@@ -58,18 +58,24 @@ def detect_edges(image: np.ndarray) -> np.ndarray:
     Returns:
         Binary edge image
     """
-    # Apply Canny edge detection with automatic threshold calculation
-    sigma = 0.33
-    median = np.median(image)
-    lower = int(max(0, (1.0 - sigma) * median))
-    upper = int(min(255, (1.0 + sigma) * median))
+    # Use fixed thresholds that work well for most floor plans
+    # Lower threshold: 50 (detects weaker edges)
+    # Upper threshold: 150 (strong edges)
+    edges = cv2.Canny(image, 50, 150)
     
-    edges = cv2.Canny(image, lower, upper)
+    logger.info(f"Edge detection complete, edge pixels: {np.count_nonzero(edges)}")
     
-    # Apply morphological operations to close gaps
-    kernel = np.ones((3, 3), np.uint8)
-    edges = cv2.dilate(edges, kernel, iterations=1)
+    # Apply morphological operations to close gaps and strengthen edges
+    kernel = np.ones((5, 5), np.uint8)
+    
+    # Dilate to connect nearby edges (important for room boundaries)
+    edges = cv2.dilate(edges, kernel, iterations=2)
+    
+    # Erode to thin the edges back
     edges = cv2.erode(edges, kernel, iterations=1)
+    
+    # Close small holes in the edges
+    edges = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, kernel)
     
     return edges
 
@@ -85,24 +91,39 @@ def find_room_contours(edges: np.ndarray, original_shape: Tuple[int, int]) -> Li
     Returns:
         List of valid room contours
     """
-    # Find contours
-    contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    # Find all contours (not just external ones)
+    # This is important for colored floor plans where rooms are filled regions
+    contours, hierarchy = cv2.findContours(edges, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    
+    logger.info(f"Found {len(contours)} total contours before filtering")
     
     # Filter contours by area
     valid_contours = []
     height, width = original_shape
     image_area = height * width
     
-    for contour in contours:
+    # Calculate dynamic area thresholds based on image size
+    # For a 3000x3000 image, min_area = 50,000 (about 224x224px)
+    # This scales with image size
+    min_area = max(MIN_ROOM_AREA, image_area * 0.005)  # At least 0.5% of image
+    max_area = min(MAX_ROOM_AREA, image_area * 0.4)    # At most 40% of image
+    
+    logger.info(f"Area thresholds: min={min_area:.0f}, max={max_area:.0f}, image_area={image_area}")
+    
+    for idx, contour in enumerate(contours):
         area = cv2.contourArea(contour)
         
         # Filter by area constraints
-        if MIN_ROOM_AREA < area < min(MAX_ROOM_AREA, image_area * 0.5):
+        if min_area < area < max_area:
             # Approximate contour to reduce vertices
             epsilon = 0.02 * cv2.arcLength(contour, True)
             approx = cv2.approxPolyDP(contour, epsilon, True)
+            
+            # Log the contour for debugging
+            logger.info(f"Valid contour {idx}: area={area:.0f}, vertices={len(approx)}")
             valid_contours.append(approx)
     
+    logger.info(f"Filtered to {len(valid_contours)} valid contours")
     return valid_contours
 
 
