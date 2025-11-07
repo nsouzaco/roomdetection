@@ -93,55 +93,9 @@ function handleApiError(error: unknown): AppError {
 }
 
 /**
- * MOCK: Detect rooms from blueprint file
- * This is a mock implementation that returns fake data
- * Will be replaced with real API call to AWS Lambda
+ * Detect rooms from blueprint file using AWS Lambda backend
  */
-export async function detectRooms(_request: DetectionRequest): Promise<DetectionResponse> {
-  // Simulate API delay
-  await new Promise((resolve) => setTimeout(resolve, 2000));
-  
-  // Mock response with realistic room data
-  const mockResponse: DetectionResponse = {
-    rooms: [
-      {
-        id: 'room_001',
-        bounding_box: [100, 100, 350, 300],
-        confidence: 0.92,
-        name_hint: 'Living Room',
-      },
-      {
-        id: 'room_002',
-        bounding_box: [400, 100, 600, 300],
-        confidence: 0.88,
-        name_hint: 'Kitchen',
-      },
-      {
-        id: 'room_003',
-        bounding_box: [100, 350, 300, 550],
-        confidence: 0.75,
-        name_hint: 'Bedroom',
-      },
-      {
-        id: 'room_004',
-        bounding_box: [350, 350, 600, 550],
-        confidence: 0.85,
-        name_hint: 'Bathroom',
-      },
-      {
-        id: 'room_005',
-        bounding_box: [650, 100, 850, 400],
-        confidence: 0.68,
-        name_hint: 'Office',
-      },
-    ],
-    processing_time_ms: 450,
-    model_version: 'mock_v1',
-  };
-  
-  return mockResponse;
-  
-  /* Real implementation (uncomment when backend is ready):
+export async function detectRooms(request: DetectionRequest): Promise<DetectionResponse> {
   try {
     const formData = new FormData();
     formData.append('file', request.file);
@@ -160,7 +114,6 @@ export async function detectRooms(_request: DetectionRequest): Promise<Detection
   } catch (error) {
     throw handleApiError(error);
   }
-  */
 }
 
 /**
