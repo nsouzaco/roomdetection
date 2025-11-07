@@ -152,21 +152,92 @@ def calculate_confidence(contour: np.ndarray, edges: np.ndarray) -> float:
     Returns:
         Confidence score (0-1)
     """
-    # Base confidence
-    confidence = CONFIDENCE_BASE
+    # Start with base confidence
+    confidence = 0.5
     
-    # Boost confidence for rectangular shapes
-    epsilon = 0.02 * cv2.arcLength(contour, True)
+    # Get contour properties
+    area = cv2.contourArea(contour)
+    perimeter = cv2.arcLength(contour, True)
+    x, y, w, h = cv2.boundingRect(contour)
+    bounding_box_area = w * h
+    
+    # Approximate contour to polygon
+    epsilon = 0.02 * perimeter
     approx = cv2.approxPolyDP(contour, epsilon, True)
-    if len(approx) == 4:
+    num_vertices = len(approx)
+    
+    # Initialize metrics
+    extent = 0.0
+    solidity = 0.0
+    aspect_ratio = 1.0
+    
+    # 1. Shape Quality (0-0.25)
+    # Rooms should fill their bounding box well
+    if bounding_box_area > 0:
+        extent = area / bounding_box_area
+        # Extent close to 1.0 means rectangular, close to 0 means irregular
+        if extent > 0.85:  # Very rectangular
+            confidence += 0.25
+        elif extent > 0.70:  # Fairly rectangular
+            confidence += 0.20
+        elif extent > 0.55:  # Somewhat rectangular
+            confidence += 0.15
+        else:
+            confidence += 0.05
+    
+    # 2. Convexity (0-0.15)
+    # Rooms should be mostly convex (no major indentations)
+    hull = cv2.convexHull(contour)
+    hull_area = cv2.contourArea(hull)
+    if hull_area > 0:
+        solidity = area / hull_area
+        if solidity > 0.95:  # Very convex
+            confidence += 0.15
+        elif solidity > 0.85:  # Mostly convex
+            confidence += 0.10
+        else:
+            confidence += 0.05
+    
+    # 3. Vertex Count (0-0.15)
+    # Rooms typically have 4-8 vertices
+    if num_vertices == 4:  # Perfect rectangle
         confidence += 0.15
+    elif 5 <= num_vertices <= 8:  # Near-rectangular
+        confidence += 0.12
+    elif 9 <= num_vertices <= 12:  # Complex but valid
+        confidence += 0.08
+    else:
+        confidence += 0.03
     
-    # Boost confidence for convex shapes
-    if cv2.isContourConvex(approx):
-        confidence += 0.1
+    # 4. Aspect Ratio (0-0.10)
+    # Rooms should not be extremely elongated
+    if w > 0 and h > 0:
+        aspect_ratio = max(w, h) / min(w, h)
+        if aspect_ratio < 2.0:  # Nearly square
+            confidence += 0.10
+        elif aspect_ratio < 3.0:  # Reasonable rectangle
+            confidence += 0.07
+        elif aspect_ratio < 4.0:  # Long room
+            confidence += 0.04
+        else:  # Very elongated
+            confidence += 0.02
     
-    # Cap at 0.95 for OpenCV-based detection
-    return min(confidence, 0.95)
+    # 5. Size Reasonableness (0-0.10)
+    # Penalize very small or very large rooms
+    if 100000 < area < 400000:  # Typical room size for 3000x3000 image
+        confidence += 0.10
+    elif 50000 < area < 500000:  # Acceptable range
+        confidence += 0.07
+    else:
+        confidence += 0.03
+    
+    # Log confidence breakdown for debugging
+    logger.info(f"Confidence breakdown - Area: {area:.0f}, Extent: {extent:.2f}, "
+                f"Solidity: {solidity:.2f}, Vertices: {num_vertices}, "
+                f"Aspect: {aspect_ratio:.2f}, Final: {confidence:.2f}")
+    
+    # Cap between 0.5 and 0.95 for OpenCV-based detection
+    return max(0.5, min(confidence, 0.95))
 
 
 def normalize_coordinates(
