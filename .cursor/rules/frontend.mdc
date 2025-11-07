@@ -1,0 +1,162 @@
+Description: Frontend component and styling guidelines
+Globs: src/**/*.tsx, src/**/*.ts
+
+@base.mdc
+
+# Frontend Development Rules
+
+## React Component Structure
+```typescript
+// Preferred component structure
+import React from 'react';
+import { ComponentProps } from './types';
+
+interface Props extends ComponentProps {
+  // Explicit prop types
+}
+
+export const ComponentName: React.FC<Props> = ({ prop1, prop2 }) => {
+  // Hooks first
+  const [state, setState] = useState();
+  
+  // Effects
+  useEffect(() => {
+    // ...
+  }, []);
+  
+  // Event handlers
+  const handleEvent = () => {
+    // ...
+  };
+  
+  // Render
+  return (
+    <div>
+      {/* JSX */}
+    </div>
+  );
+};
+```
+
+## Styling with Tailwind CSS
+- Use Tailwind utility classes for styling
+- Create custom components for repeated patterns
+- Use `className` composition for conditional styles
+- Extract complex class strings to constants or `cn()` utility
+- Follow mobile-first responsive design
+
+### Design System Tokens
+```typescript
+// Example color palette (modern, professional)
+colors: {
+  primary: '#3B82F6',      // Blue - main actions
+  success: '#10B981',      // Green - successful detections
+  warning: '#F59E0B',      // Amber - low confidence
+  error: '#EF4444',        // Red - errors
+  neutral: {
+    50: '#F9FAFB',         // Backgrounds
+    100: '#F3F4F6',
+    // ... neutral scale
+  }
+}
+```
+
+## Konva.js Canvas Patterns
+```typescript
+// Use react-konva components
+import { Stage, Layer, Rect, Line } from 'react-konva';
+
+// Handle canvas interactions
+const handleDragEnd = (e: KonvaEventObject<DragEvent>) => {
+  // Update room position
+};
+
+// Render detected rooms as overlays
+<Stage width={width} height={height}>
+  <Layer>
+    {rooms.map(room => (
+      <Rect
+        key={room.id}
+        x={room.x}
+        y={room.y}
+        width={room.width}
+        height={room.height}
+        stroke="blue"
+        strokeWidth={2}
+        draggable
+        onDragEnd={handleDragEnd}
+      />
+    ))}
+  </Layer>
+</Stage>
+```
+
+## File Upload Patterns
+```typescript
+// Use react-dropzone for drag-and-drop
+import { useDropzone } from 'react-dropzone';
+
+const { getRootProps, getInputProps, isDragActive } = useDropzone({
+  accept: {
+    'image/png': ['.png'],
+    'image/jpeg': ['.jpg', '.jpeg'],
+    'image/tiff': ['.tiff', '.tif'],
+  },
+  maxSize: 10 * 1024 * 1024, // 10MB
+  onDrop: handleFileUpload,
+});
+```
+
+## API Integration
+```typescript
+// Use React Query for data fetching
+import { useMutation } from '@tanstack/react-query';
+
+const { mutate, isLoading, error } = useMutation({
+  mutationFn: (file: File) => api.detectRooms(file),
+  onSuccess: (data) => {
+    // Handle detected rooms
+  },
+  onError: (error) => {
+    // Show user-friendly error
+  },
+});
+```
+
+## Loading States
+- Always show loading indicators for async operations
+- Use skeleton screens for better perceived performance
+- Show progress percentage when possible
+- Handle Lambda cold starts (may take 1-3s)
+
+## Error Handling
+```typescript
+// User-friendly error messages
+const ERROR_MESSAGES = {
+  FILE_TOO_LARGE: 'File size must be under 10MB',
+  INVALID_FORMAT: 'Please upload a PNG, JPG, or TIFF file',
+  PROCESSING_FAILED: 'Unable to process blueprint. Please try again.',
+  NETWORK_ERROR: 'Network error. Check your connection and retry.',
+};
+```
+
+## Accessibility
+- Add ARIA labels to all interactive elements
+- Ensure keyboard navigation works (Tab, Enter, Escape)
+- Use semantic HTML elements
+- Provide alt text for images
+- Ensure color contrast meets WCAG AA standards
+
+## Performance Optimization
+- Lazy load components with React.lazy()
+- Memoize expensive calculations with useMemo()
+- Debounce user input handlers
+- Optimize canvas rendering (avoid unnecessary re-renders)
+- Use virtual scrolling for large lists
+
+## Modern UI Patterns
+- Use subtle animations for state changes (Framer Motion or CSS transitions)
+- Implement toast notifications for feedback
+- Use modals/dialogs for confirmations
+- Add tooltips for icon buttons
+- Implement keyboard shortcuts for power users

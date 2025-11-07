@@ -1,0 +1,82 @@
+Description: Core project rules and patterns for Location Detection AI
+
+# Location Detection AI - Core Rules
+
+## Project Overview
+This is an AI-powered room detection system that automatically identifies room boundaries from architectural blueprints. The project follows a phased approach: Phase 1 (OpenCV MVP) and Phase 2 (YOLO v8).
+
+## Tech Stack
+- **Frontend**: React 19 + TypeScript + Vite
+- **Backend**: AWS Lambda + API Gateway
+- **ML**: OpenCV (Phase 1) → YOLO v8 (Phase 2)
+- **Styling**: Tailwind CSS (modern, utility-first)
+- **Canvas**: Konva.js/react-konva for blueprint visualization
+
+## Code Quality Standards
+- Always use TypeScript with strict type checking
+- Prefer functional components with hooks over class components
+- Use meaningful variable and function names (no abbreviations unless standard)
+- Add JSDoc comments for complex functions
+- Keep components small and focused (single responsibility)
+
+## Design Principles
+- **Modern & Intuitive**: Clean, professional UI inspired by modern SaaS apps
+- **Performance First**: Optimize for <30s processing time end-to-end
+- **User Feedback**: Always show loading states and progress indicators
+- **Error Handling**: Graceful degradation with clear error messages
+- **Accessibility**: ARIA labels, keyboard navigation, screen reader support
+
+## Project Structure Conventions
+```
+src/
+├── components/         # Reusable React components
+│   ├── upload/        # Upload-related components
+│   ├── canvas/        # Blueprint canvas components
+│   └── common/        # Shared UI components
+├── services/          # API clients and external services
+├── types/             # TypeScript type definitions
+├── hooks/             # Custom React hooks
+├── utils/             # Helper functions
+└── styles/            # Global styles and Tailwind config
+```
+
+## Component Naming
+- PascalCase for component files and names (e.g., `UploadZone.tsx`)
+- Use descriptive names that indicate purpose (e.g., `BlueprintCanvas` not `Canvas`)
+- Co-locate related files (e.g., `UploadZone.tsx`, `UploadZone.test.tsx`)
+
+## State Management
+- Use React Query for API/server state
+- Use React Context for global UI state
+- Keep local state in components when possible
+- Avoid Redux unless complexity demands it
+
+## API Integration Patterns
+- All API calls go through centralized service layer
+- Implement retry logic for transient failures
+- Show loading states for all async operations
+- Handle Lambda cold starts gracefully (up to 3s delay)
+
+## AWS Integration Notes
+- Use pre-signed URLs for direct S3 uploads (avoid Lambda 6MB limit)
+- Coordinates returned in normalized 0-1000 range
+- Handle 30s Lambda timeout constraint
+- Monitor CloudWatch for performance metrics
+
+## Testing Requirements
+- Unit tests for utilities and pure functions
+- Component tests for UI components (React Testing Library)
+- Integration tests for API interactions
+- Test with realistic blueprint samples
+
+## Performance Targets
+- Page load: <2s
+- File upload: <5s for 5MB file
+- Detection processing: <30s total
+- False positive rate: <5%
+- Phase 1 accuracy: ≥75%, Phase 2: ≥85%
+
+## Cost Constraints
+- Keep inference cost <$0.05 per blueprint
+- Use efficient S3 lifecycle policies
+- Optimize Lambda memory and timeout settings

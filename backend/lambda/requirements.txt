@@ -1,0 +1,6 @@
+# Python dependencies for Lambda function (Phase 1: OpenCV)
+opencv-python-headless==4.8.1.78
+numpy==1.24.3
+boto3==1.28.85
+pillow==10.1.0
+
