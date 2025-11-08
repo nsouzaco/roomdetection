@@ -9,12 +9,15 @@ import { ErrorType, DetectionModel } from '../types';
 // API configuration
 const OPENCV_API_URL = import.meta.env.VITE_OPENCV_API_URL || 'http://localhost:3000';
 const YOLO_API_URL = import.meta.env.VITE_YOLO_API_URL || 'http://localhost:3001';
-const API_TIMEOUT = 30000; // 30 seconds
 
-// Create axios instance with retry logic
-const createApiClient = (baseURL: string) => axios.create({
+// Model-specific timeouts (YOLO needs more time for model loading and inference)
+const OPENCV_TIMEOUT = 30000; // 30 seconds
+const YOLO_TIMEOUT = 60000; // 60 seconds (first request loads model, ~10s + inference ~5s + buffer)
+
+// Create axios instance with model-specific timeout
+const createApiClient = (baseURL: string, timeout: number) => axios.create({
   baseURL,
-  timeout: API_TIMEOUT,
+  timeout,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -65,8 +68,10 @@ export async function detectRooms(
   model: DetectionModel = DetectionModel.OPENCV
 ): Promise<DetectionResponse> {
   try {
-    const baseURL = model === DetectionModel.YOLO ? YOLO_API_URL : OPENCV_API_URL;
-    const apiClient = createApiClient(baseURL);
+    const isYolo = model === DetectionModel.YOLO;
+    const baseURL = isYolo ? YOLO_API_URL : OPENCV_API_URL;
+    const timeout = isYolo ? YOLO_TIMEOUT : OPENCV_TIMEOUT;
+    const apiClient = createApiClient(baseURL, timeout);
     
     const formData = new FormData();
     formData.append('file', request.file);
@@ -93,7 +98,7 @@ export async function detectRooms(
  */
 export async function getPresignedUrl(filename: string): Promise<string> {
   try {
-    const apiClient = createApiClient(OPENCV_API_URL);
+    const apiClient = createApiClient(OPENCV_API_URL, OPENCV_TIMEOUT);
     const response = await apiClient.post<{ upload_url: string }>('/upload-url', {
       filename,
     });
