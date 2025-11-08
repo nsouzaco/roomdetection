@@ -199,26 +199,22 @@ export class YoloEcsStack extends cdk.Stack {
       },
     });
 
-    // Create HTTP URL integration (public ALB)
+    // Create HTTP URL integration that forwards to ALB
+    // The {proxy} path parameter is automatically appended by the integration
     const albIntegration = new apigatewayv2_integrations.HttpUrlIntegration(
       'AlbIntegration',
-      `http://${this.loadBalancer.loadBalancerDnsName}`,
-      {
-        method: apigatewayv2.HttpMethod.ANY,
-      }
+      `http://${this.loadBalancer.loadBalancerDnsName}`
     );
 
-    // Add routes
+    // Catch-all route for all paths
     httpApi.addRoutes({
       path: '/{proxy+}',
-      methods: [apigatewayv2.HttpMethod.ANY],
       integration: albIntegration,
     });
 
-    // Root route
+    // Root path route
     httpApi.addRoutes({
       path: '/',
-      methods: [apigatewayv2.HttpMethod.ANY],
       integration: albIntegration,
     });
 
