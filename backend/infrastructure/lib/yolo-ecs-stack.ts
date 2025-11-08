@@ -199,23 +199,41 @@ export class YoloEcsStack extends cdk.Stack {
       },
     });
 
-    // Create HTTP URL integration that forwards to ALB
-    // The {proxy} path parameter is automatically appended by the integration
-    const albIntegration = new apigatewayv2_integrations.HttpUrlIntegration(
-      'AlbIntegration',
-      `http://${this.loadBalancer.loadBalancerDnsName}`
+    // Create HTTP URL integration for proxy paths (forwards the full path)
+    const proxyIntegration = new apigatewayv2_integrations.HttpUrlIntegration(
+      'ProxyIntegration',
+      `http://${this.loadBalancer.loadBalancerDnsName}/{proxy}`
     );
 
-    // Catch-all route for all paths
+    // Create HTTP URL integration for root path
+    const rootIntegration = new apigatewayv2_integrations.HttpUrlIntegration(
+      'RootIntegration',
+      `http://${this.loadBalancer.loadBalancerDnsName}/`
+    );
+
+    // Catch-all route for all paths - forwards /{proxy+} to ALB
     httpApi.addRoutes({
       path: '/{proxy+}',
-      integration: albIntegration,
+      methods: [
+        apigatewayv2.HttpMethod.GET,
+        apigatewayv2.HttpMethod.POST,
+        apigatewayv2.HttpMethod.PUT,
+        apigatewayv2.HttpMethod.DELETE,
+        apigatewayv2.HttpMethod.PATCH,
+        apigatewayv2.HttpMethod.OPTIONS,
+      ],
+      integration: proxyIntegration,
     });
 
     // Root path route
     httpApi.addRoutes({
       path: '/',
-      integration: albIntegration,
+      methods: [
+        apigatewayv2.HttpMethod.GET,
+        apigatewayv2.HttpMethod.POST,
+        apigatewayv2.HttpMethod.OPTIONS,
+      ],
+      integration: rootIntegration,
     });
 
     // ===== Outputs =====
