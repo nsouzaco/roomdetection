@@ -1,11 +1,13 @@
 /**
  * ECS/Fargate Stack for YOLO Room Detection Service
- * Deploys YOLOv8 model as a containerized service
+ * Deploys YOLOv8 model as a containerized service with API Gateway HTTPS proxy
  */
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
+import * as apigatewayv2 from 'aws-cdk-lib/aws-apigatewayv2';
+import * as apigatewayv2_integrations from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import { Construct } from 'constructs';
@@ -21,6 +23,7 @@ export interface YoloEcsStackProps extends cdk.StackProps {
 export class YoloEcsStack extends cdk.Stack {
   public readonly serviceUrl: string;
   public readonly loadBalancer: elbv2.ApplicationLoadBalancer;
+  private readonly listener: elbv2.ApplicationListener;
 
   constructor(scope: Construct, id: string, props?: YoloEcsStackProps) {
     super(scope, id, props);
@@ -146,7 +149,7 @@ export class YoloEcsStack extends cdk.Stack {
       deregistrationDelay: cdk.Duration.seconds(30),
     });
 
-    const listener = this.loadBalancer.addListener('HttpListener', {
+    this.listener = this.loadBalancer.addListener('HttpListener', {
       port: 80,
       protocol: elbv2.ApplicationProtocol.HTTP,
       defaultTargetGroups: [targetGroup],
@@ -184,24 +187,65 @@ export class YoloEcsStack extends cdk.Stack {
       scaleOutCooldown: cdk.Duration.seconds(60),
     });
 
+    // ===== API Gateway HTTP API (HTTPS Proxy) =====
+    // Provides HTTPS endpoint for the HTTP-only ALB
+    const httpApi = new apigatewayv2.HttpApi(this, 'YoloHttpApi', {
+      apiName: 'yolo-room-detection-api',
+      description: 'HTTPS proxy for YOLO ECS service',
+      corsPreflight: {
+        allowOrigins: ['*'], // Configure for production
+        allowMethods: [apigatewayv2.CorsHttpMethod.POST, apigatewayv2.CorsHttpMethod.GET, apigatewayv2.CorsHttpMethod.OPTIONS],
+        allowHeaders: ['Content-Type', 'Authorization'],
+      },
+    });
+
+    // Create HTTP URL integration (public ALB)
+    const albIntegration = new apigatewayv2_integrations.HttpUrlIntegration(
+      'AlbIntegration',
+      `http://${this.loadBalancer.loadBalancerDnsName}`,
+      {
+        method: apigatewayv2.HttpMethod.ANY,
+      }
+    );
+
+    // Add routes
+    httpApi.addRoutes({
+      path: '/{proxy+}',
+      methods: [apigatewayv2.HttpMethod.ANY],
+      integration: albIntegration,
+    });
+
+    // Root route
+    httpApi.addRoutes({
+      path: '/',
+      methods: [apigatewayv2.HttpMethod.ANY],
+      integration: albIntegration,
+    });
+
     // ===== Outputs =====
-    this.serviceUrl = `http://${this.loadBalancer.loadBalancerDnsName}`;
+    this.serviceUrl = httpApi.apiEndpoint;
 
     new cdk.CfnOutput(this, 'LoadBalancerDNS', {
       value: this.loadBalancer.loadBalancerDnsName,
-      description: 'DNS name of the load balancer',
+      description: 'DNS name of the load balancer (internal)',
       exportName: 'YoloServiceDNS',
+    });
+
+    new cdk.CfnOutput(this, 'ApiGatewayURL', {
+      value: httpApi.apiEndpoint,
+      description: 'HTTPS API Gateway URL',
+      exportName: 'YoloApiGatewayURL',
     });
 
     new cdk.CfnOutput(this, 'ServiceURL', {
       value: this.serviceUrl,
-      description: 'URL of the YOLO detection service',
+      description: 'URL of the YOLO detection service (HTTPS)',
       exportName: 'YoloServiceURL',
     });
 
     new cdk.CfnOutput(this, 'DetectEndpoint', {
       value: `${this.serviceUrl}/detect`,
-      description: 'YOLO detection endpoint',
+      description: 'YOLO detection endpoint (HTTPS)',
       exportName: 'YoloDetectEndpoint',
     });
   }
