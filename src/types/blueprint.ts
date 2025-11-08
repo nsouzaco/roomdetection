@@ -3,6 +3,16 @@
  */
 
 /**
+ * Detection model types
+ */
+export const DetectionModel = {
+  OPENCV: 'opencv',
+  YOLO: 'yolo',
+} as const;
+
+export type DetectionModel = typeof DetectionModel[keyof typeof DetectionModel];
+
+/**
  * Represents a detected room with normalized coordinates
  */
 export interface DetectedRoom {

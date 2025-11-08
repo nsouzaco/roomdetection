@@ -7,8 +7,8 @@ import { BlueprintCanvas } from './components/canvas';
 import { Card, ProcessingStatus, ControlPanel } from './components/common';
 import { detectRooms } from './services';
 import { detectedRoomsToCanvas } from './utils';
-import type { AppError, CanvasRoom, ProcessingStatus as Status } from './types';
-import { ProcessingStatus as StatusEnum } from './types';
+import type { AppError, CanvasRoom, ProcessingStatus as Status, DetectionModel } from './types';
+import { ProcessingStatus as StatusEnum, DetectionModel as ModelEnum } from './types';
 
 function App() {
   const [status, setStatus] = useState<Status>(StatusEnum.IDLE);
@@ -17,6 +17,7 @@ function App() {
   const [rooms, setRooms] = useState<CanvasRoom[]>([]);
   const [selectedRoomId, setSelectedRoomId] = useState<string | undefined>();
   const [error, setError] = useState<AppError | null>(null);
+  const [detectionModel, setDetectionModel] = useState<DetectionModel>(ModelEnum.OPENCV);
 
   const handleFileSelect = async (file: File) => {
     setError(null);
@@ -34,7 +35,7 @@ function App() {
     setStatus(StatusEnum.PROCESSING);
     
     try {
-      const response = await detectRooms({ file });
+      const response = await detectRooms({ file }, detectionModel);
       const canvasRooms = detectedRoomsToCanvas(
         response.rooms,
         img.width,
@@ -214,6 +215,8 @@ function App() {
               <ControlPanel
                 rooms={rooms}
                 selectedRoomId={selectedRoomId}
+                detectionModel={detectionModel}
+                onModelChange={setDetectionModel}
                 onAcceptAll={handleAcceptAll}
                 onReprocess={handleReprocess}
                 onDeleteRoom={handleDeleteRoom}

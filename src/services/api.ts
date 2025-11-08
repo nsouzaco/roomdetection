@@ -1,61 +1,26 @@
 /**
  * API client for room detection service
- * Currently using mock data - will be replaced with real AWS Lambda calls
+ * Supports both OpenCV (fast) and YOLO (accurate) models
  */
-import axios, { AxiosError } from 'axios';
+import axios from 'axios';
 import type { DetectionResponse, DetectionRequest, AppError } from '../types';
-import { ErrorType } from '../types';
+import { ErrorType, DetectionModel } from '../types';
 
-// API configuration (will be replaced with actual AWS API Gateway endpoint)
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+// API configuration
+const OPENCV_API_URL = import.meta.env.VITE_OPENCV_API_URL || 'http://localhost:3000';
+const YOLO_API_URL = import.meta.env.VITE_YOLO_API_URL || 'http://localhost:3001';
 const API_TIMEOUT = 30000; // 30 seconds
 
 // Create axios instance with retry logic
-const apiClient = axios.create({
-  baseURL: API_BASE_URL,
+const createApiClient = (baseURL: string) => axios.create({
+  baseURL,
   timeout: API_TIMEOUT,
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
-// Retry configuration
-const MAX_RETRIES = 3;
-const RETRY_DELAY = 1000;
-
-/**
- * Retry failed requests with exponential backoff
- */
-const retryRequest = async (error: AxiosError, retryCount = 0): Promise<any> => {
-  if (retryCount >= MAX_RETRIES) {
-    throw error;
-  }
-  
-  // Only retry on network errors or 5xx server errors
-  if (!error.response || (error.response.status >= 500 && error.response.status < 600)) {
-    const delay = RETRY_DELAY * Math.pow(2, retryCount);
-    await new Promise((resolve) => setTimeout(resolve, delay));
-    
-    return apiClient.request(error.config!);
-  }
-  
-  throw error;
-};
-
-// Add response interceptor for retry logic
-apiClient.interceptors.response.use(
-  (response) => response,
-  async (error) => {
-    const retryCount = error.config.retryCount || 0;
-    error.config.retryCount = retryCount + 1;
-    
-    try {
-      return await retryRequest(error, retryCount);
-    } catch (retryError) {
-      return Promise.reject(retryError);
-    }
-  }
-);
+// Note: Retry logic can be added per-request if needed
 
 /**
  * Convert axios error to AppError
@@ -93,10 +58,16 @@ function handleApiError(error: unknown): AppError {
 }
 
 /**
- * Detect rooms from blueprint file using AWS Lambda backend
+ * Detect rooms from blueprint file using selected detection model
  */
-export async function detectRooms(request: DetectionRequest): Promise<DetectionResponse> {
+export async function detectRooms(
+  request: DetectionRequest,
+  model: DetectionModel = DetectionModel.OPENCV
+): Promise<DetectionResponse> {
   try {
+    const baseURL = model === DetectionModel.YOLO ? YOLO_API_URL : OPENCV_API_URL;
+    const apiClient = createApiClient(baseURL);
+    
     const formData = new FormData();
     formData.append('file', request.file);
     
@@ -122,6 +93,7 @@ export async function detectRooms(request: DetectionRequest): Promise<DetectionR
  */
 export async function getPresignedUrl(filename: string): Promise<string> {
   try {
+    const apiClient = createApiClient(OPENCV_API_URL);
     const response = await apiClient.post<{ upload_url: string }>('/upload-url', {
       filename,
     });

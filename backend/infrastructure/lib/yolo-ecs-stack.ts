@@ -83,16 +83,8 @@ export class YoloEcsStack extends cdk.Stack {
         PORT: '8080',
         PYTHONUNBUFFERED: '1',
       },
-      healthCheck: {
-        command: [
-          'CMD-SHELL',
-          'python -c "import requests; requests.get(\'http://localhost:8080/health\')" || exit 1',
-        ],
-        interval: cdk.Duration.seconds(30),
-        timeout: cdk.Duration.seconds(10),
-        retries: 3,
-        startPeriod: cdk.Duration.seconds(60),
-      },
+      // Note: Removed container healthCheck - ALB handles health checks via /health endpoint
+      // Container health check was failing due to missing 'requests' library
     });
 
     container.addPortMappings({
@@ -167,7 +159,7 @@ export class YoloEcsStack extends cdk.Stack {
       desiredCount: 1, // Start with 1, can scale up
       securityGroups: [serviceSecurityGroup],
       assignPublicIp: true, // Required for pulling Docker images from ECR
-      healthCheckGracePeriod: cdk.Duration.seconds(60),
+      healthCheckGracePeriod: cdk.Duration.seconds(120), // Increased to allow model loading
       serviceName: 'yolo-room-detection-service',
     });
 

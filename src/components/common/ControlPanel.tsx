@@ -4,10 +4,13 @@
 import React from 'react';
 import { Button } from './Button';
 import type { CanvasRoom } from '../../types';
+import { DetectionModel } from '../../types';
 
 interface ControlPanelProps {
   rooms: CanvasRoom[];
   selectedRoomId?: string;
+  detectionModel: DetectionModel;
+  onModelChange: (model: DetectionModel) => void;
   onAcceptAll: () => void;
   onReprocess: () => void;
   onDeleteRoom?: (roomId: string) => void;
@@ -18,6 +21,8 @@ interface ControlPanelProps {
 export const ControlPanel: React.FC<ControlPanelProps> = ({
   rooms,
   selectedRoomId,
+  detectionModel,
+  onModelChange,
   onAcceptAll,
   onReprocess,
   onDeleteRoom,
@@ -31,6 +36,58 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
   
   return (
     <div className="space-y-4">
+      {/* Detection Model Toggle */}
+      <div className="bg-neutral-50 rounded-lg p-4 border border-neutral-200">
+        <p className="text-xs text-neutral-700 font-medium uppercase tracking-wide mb-3">
+          Detection Model
+        </p>
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={() => onModelChange(DetectionModel.OPENCV)}
+            disabled={disabled}
+            className={`
+              px-3 py-2 rounded-md text-sm font-medium transition-all
+              ${detectionModel === DetectionModel.OPENCV
+                ? 'bg-primary-600 text-white shadow-sm'
+                : 'bg-white text-neutral-700 border border-neutral-300 hover:bg-neutral-50'
+              }
+              ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
+            `}
+          >
+            <div className="flex flex-col items-center">
+              <span className="text-base">⚡</span>
+              <span>Fast</span>
+              <span className="text-xs opacity-75">OpenCV</span>
+            </div>
+          </button>
+          <button
+            onClick={() => onModelChange(DetectionModel.YOLO)}
+            disabled={disabled}
+            className={`
+              px-3 py-2 rounded-md text-sm font-medium transition-all
+              ${detectionModel === DetectionModel.YOLO
+                ? 'bg-primary-600 text-white shadow-sm'
+                : 'bg-white text-neutral-700 border border-neutral-300 hover:bg-neutral-50'
+              }
+              ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
+            `}
+          >
+            <div className="flex flex-col items-center">
+              <span className="text-base">🎯</span>
+              <span>Accurate</span>
+              <span className="text-xs opacity-75">YOLO</span>
+            </div>
+          </button>
+        </div>
+        <div className="mt-2 text-xs text-neutral-600">
+          {detectionModel === DetectionModel.OPENCV ? (
+            <p>⚡ Fast processing (~200-500ms)</p>
+          ) : (
+            <p>🎯 High accuracy (99.1% mAP50, ~1-2s)</p>
+          )}
+        </div>
+      </div>
+      
       {/* Stats */}
       <div className="grid grid-cols-2 gap-4">
         <div className="bg-neutral-50 rounded-lg p-4 border border-neutral-200">
