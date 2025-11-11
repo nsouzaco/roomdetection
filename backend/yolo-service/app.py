@@ -1,18 +1,17 @@
 """
 YOLO Room Detection Service - FastAPI Application
-Runs on ECS/Fargate for high-accuracy room detection
+Uses Roboflow Direct API for room detection (lightweight, no SDK)
 """
 import os
 import io
-import json
 import time
 import logging
+import base64
 from typing import List, Dict, Any
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image
-import numpy as np
-from ultralytics import YOLO
+import requests
 
 # Configure logging
 logging.basicConfig(
@@ -23,15 +22,15 @@ logger = logging.getLogger(__name__)
 
 # Initialize FastAPI app
 app = FastAPI(
-    title="YOLO Room Detection Service",
-    description="High-accuracy room detection using YOLOv8",
-    version="1.0.0"
+    title="YOLO Room Detection Service (Roboflow Direct API)",
+    description="High-accuracy room detection using Roboflow Direct API",
+    version="2.0.0"
 )
 
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure appropriately for production
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -39,23 +38,9 @@ app.add_middleware(
 
 # Constants
 NORMALIZED_RANGE = 1000
-MODEL_PATH = os.getenv("MODEL_PATH", "/app/models/yolov8_room_detector.pt")
-
-# Global model instance (loaded once at startup)
-model = None
-
-
-@app.on_event("startup")
-async def load_model():
-    """Load YOLO model on startup"""
-    global model
-    try:
-        logger.info(f"Loading YOLO model from {MODEL_PATH}")
-        model = YOLO(MODEL_PATH)
-        logger.info("YOLO model loaded successfully")
-    except Exception as e:
-        logger.error(f"Failed to load model: {str(e)}")
-        raise
+ROBOFLOW_API_KEY = os.getenv("ROBOFLOW_API_KEY", "S6mAH8NfqXgodc6InODR")
+ROBOFLOW_MODEL_ID = "room-detection-r0fta/1"
+ROBOFLOW_API_URL = f"https://detect.roboflow.com/{ROBOFLOW_MODEL_ID}"
 
 
 @app.get("/health")
@@ -63,8 +48,9 @@ async def health_check():
     """Health check endpoint for ECS"""
     return {
         "status": "healthy",
-        "model_loaded": model is not None,
-        "service": "yolo-room-detection"
+        "model": ROBOFLOW_MODEL_ID,
+        "service": "roboflow-direct-api",
+        "api_configured": bool(ROBOFLOW_API_KEY)
     }
 
 
@@ -72,10 +58,10 @@ async def health_check():
 async def root():
     """Root endpoint with service information"""
     return {
-        "service": "YOLO Room Detection Service",
-        "version": "1.0.0",
-        "model": "YOLOv8n",
-        "accuracy": "99.1% mAP50",
+        "service": "YOLO Room Detection Service (Roboflow Direct API)",
+        "version": "2.0.0",
+        "model": ROBOFLOW_MODEL_ID,
+        "provider": "Roboflow Direct API",
         "endpoints": {
             "health": "/health",
             "detect": "/detect (POST)"
@@ -86,7 +72,7 @@ async def root():
 @app.post("/detect")
 async def detect_rooms(file: UploadFile = File(...)):
     """
-    Detect rooms in a blueprint image using YOLO
+    Detect rooms in a blueprint image using Roboflow Direct API
     
     Args:
         file: Blueprint image file (PNG, JPG, etc.)
@@ -97,9 +83,12 @@ async def detect_rooms(file: UploadFile = File(...)):
     start_time = time.time()
     
     try:
-        # Validate model is loaded
-        if model is None:
-            raise HTTPException(status_code=503, detail="Model not loaded")
+        # Validate API key
+        if not ROBOFLOW_API_KEY:
+            raise HTTPException(
+                status_code=503,
+                detail="Roboflow API key not configured"
+            )
         
         # Validate file type
         if not file.content_type.startswith('image/'):
@@ -108,42 +97,75 @@ async def detect_rooms(file: UploadFile = File(...)):
                 detail=f"Invalid file type: {file.content_type}. Must be an image."
             )
         
-        # Read and process image
+        # Read image
         logger.info(f"Processing upload: {file.filename}")
-        contents = await file.read()
-        image = Image.open(io.BytesIO(contents))
-        image_array = np.array(image)
+        image_bytes = await file.read()
+        image = Image.open(io.BytesIO(image_bytes))
+        img_width, img_height = image.size
         
-        logger.info(f"Image shape: {image_array.shape}")
+        logger.info(f"Image size: {img_width}x{img_height}")
         
-        # Run YOLO inference
-        logger.info("Running YOLO inference...")
-        results = model(image_array, verbose=False)[0]
+        # Convert image to base64
+        buffered = io.BytesIO()
+        image.save(buffered, format="JPEG")
+        img_base64 = base64.b64encode(buffered.getvalue()).decode('utf-8')
         
-        logger.info(f"YOLO found {len(results.boxes)} detections")
+        # Call Roboflow Direct API
+        logger.info(f"Calling Roboflow API: {ROBOFLOW_MODEL_ID}")
+        response = requests.post(
+            ROBOFLOW_API_URL,
+            params={
+                "api_key": ROBOFLOW_API_KEY,
+                "confidence": 25,
+            },
+            data=img_base64,
+            headers={
+                "Content-Type": "application/x-www-form-urlencoded"
+            },
+            timeout=10
+        )
         
-        # Convert YOLO results to our API format
+        if response.status_code != 200:
+            logger.error(f"Roboflow API error: {response.status_code} - {response.text}")
+            raise HTTPException(
+                status_code=response.status_code,
+                detail=f"Roboflow API error: {response.text}"
+            )
+        
+        result = response.json()
+        predictions = result.get('predictions', [])
+        logger.info(f"Roboflow returned {len(predictions)} predictions")
+        
+        # Convert Roboflow predictions to our API format
         rooms = []
-        height, width = image_array.shape[:2]
         
-        for idx, box in enumerate(results.boxes):
-            # Get box coordinates (xyxy format)
-            x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
-            confidence = float(box.conf[0].cpu().numpy())
+        for idx, pred in enumerate(predictions):
+            # Roboflow returns: x, y (center), width, height
+            x_center = pred['x']
+            y_center = pred['y']
+            width = pred['width']
+            height = pred['height']
+            confidence = pred.get('confidence', 0.0)
             
-            # Normalize coordinates to 0-1000 range
+            # Convert to corner coordinates
+            x1 = int(x_center - width / 2)
+            y1 = int(y_center - height / 2)
+            x2 = int(x_center + width / 2)
+            y2 = int(y_center + height / 2)
+            
+            # Normalize to 0-1000 range
             normalized_bbox = [
-                int((x1 / width) * NORMALIZED_RANGE),
-                int((y1 / height) * NORMALIZED_RANGE),
-                int((x2 / width) * NORMALIZED_RANGE),
-                int((y2 / height) * NORMALIZED_RANGE),
+                int((x1 / img_width) * NORMALIZED_RANGE),
+                int((y1 / img_height) * NORMALIZED_RANGE),
+                int((x2 / img_width) * NORMALIZED_RANGE),
+                int((y2 / img_height) * NORMALIZED_RANGE),
             ]
             
             rooms.append({
                 'id': f'room_{idx:03d}',
                 'bounding_box': normalized_bbox,
                 'confidence': round(confidence, 2),
-                'name_hint': None,  # Future: Add room type classification
+                'name_hint': pred.get('class', None),
             })
         
         # Sort by confidence (highest first)
@@ -156,12 +178,15 @@ async def detect_rooms(file: UploadFile = File(...)):
         return {
             'rooms': rooms,
             'processing_time_ms': processing_time,
-            'model_version': 'yolov8n_phase2',
-            'service': 'ecs-fargate'
+            'model_version': ROBOFLOW_MODEL_ID,
+            'service': 'roboflow-direct-api'
         }
         
     except HTTPException:
         raise
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Roboflow API request failed: {str(e)}")
+        raise HTTPException(status_code=503, detail=f"Roboflow API unavailable: {str(e)}")
     except Exception as e:
         logger.error(f"Error processing request: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
@@ -171,4 +196,3 @@ if __name__ == "__main__":
     import uvicorn
     port = int(os.getenv("PORT", "8080"))
     uvicorn.run(app, host="0.0.0.0", port=port)
-

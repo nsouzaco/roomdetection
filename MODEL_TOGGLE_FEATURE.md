@@ -228,3 +228,4 @@ Both services are already deployed:
 **Built successfully!** 🎉  
 The frontend now includes the model toggle and can switch between OpenCV and YOLO detection on demand.
 
+

@@ -128,7 +128,7 @@ function App() {
             </div>
             <div>
               <h1 className="text-2xl font-semibold text-neutral-900">
-                Location Detection AI
+                roomdetection
               </h1>
               <p className="text-sm text-neutral-500">
                 Automatically detect room boundaries from architectural blueprints
@@ -166,7 +166,7 @@ function App() {
                   <svg className="w-5 h-5 text-error-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
-                  <div>
+      <div>
                     <h3 className="text-sm font-medium text-error-900">{error.message}</h3>
                     {error.details && (
                       <p className="text-sm text-error-700 mt-1">{error.details}</p>
@@ -225,14 +225,14 @@ function App() {
               />
             </Card>
           </div>
-        </div>
+      </div>
       </main>
 
       {/* Footer */}
       <footer className="mt-16 border-t border-neutral-200 bg-white">
         <div className="max-w-7xl mx-auto px-4 py-6">
           <p className="text-sm text-neutral-500 text-center">
-            Location Detection AI • Phase 1 MVP • OpenCV-based room detection
+            roomdetection • AI-powered room detection • OpenCV + YOLO models
           </p>
         </div>
       </footer>

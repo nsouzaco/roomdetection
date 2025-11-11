@@ -1,0 +1,8 @@
+path: /Users/nat/roomdetection/training/Room Detection.v2-version-2.yolov8-obb
+train: train/images
+val: valid/images
+test: test/images
+
+nc: 1
+names: 
+  0: room

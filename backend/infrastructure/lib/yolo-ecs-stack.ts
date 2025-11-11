@@ -82,9 +82,10 @@ export class YoloEcsStack extends cdk.Stack {
         logGroup,
       }),
       environment: {
-        MODEL_PATH: '/app/models/yolov8_room_detector.pt',
         PORT: '8080',
         PYTHONUNBUFFERED: '1',
+        // Roboflow API key - loaded from environment variable for security
+        ROBOFLOW_API_KEY: process.env.ROBOFLOW_API_KEY || 'S6mAH8NfqXgodc6InODR',
       },
       // Note: Removed container healthCheck - ALB handles health checks via /health endpoint
       // Container health check was failing due to missing 'requests' library
