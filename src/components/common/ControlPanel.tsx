@@ -46,10 +46,10 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
             onClick={() => onModelChange(DetectionModel.OPENCV)}
             disabled={disabled}
             className={`
-              px-3 py-2 rounded-md text-sm font-medium transition-all
+              px-3 py-2 rounded-md text-sm font-medium transition-all bg-white text-neutral-700
               ${detectionModel === DetectionModel.OPENCV
-                ? 'bg-primary-600 text-white shadow-sm'
-                : 'bg-white text-neutral-700 border border-neutral-300 hover:bg-neutral-50'
+                ? 'border-2 border-black shadow-sm'
+                : 'border border-neutral-300 hover:bg-neutral-50'
               }
               ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
             `}
@@ -64,10 +64,10 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
             onClick={() => onModelChange(DetectionModel.YOLO)}
             disabled={disabled}
             className={`
-              px-3 py-2 rounded-md text-sm font-medium transition-all
+              px-3 py-2 rounded-md text-sm font-medium transition-all bg-white text-neutral-700
               ${detectionModel === DetectionModel.YOLO
-                ? 'bg-primary-600 text-white shadow-sm'
-                : 'bg-white text-neutral-700 border border-neutral-300 hover:bg-neutral-50'
+                ? 'border-2 border-black shadow-sm'
+                : 'border border-neutral-300 hover:bg-neutral-50'
               }
               ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
             `}

@@ -128,7 +128,7 @@ function App() {
             </div>
             <div>
               <h1 className="text-2xl font-semibold text-neutral-900">
-                roomdetection
+                Room Detection
               </h1>
               <p className="text-sm text-neutral-500">
                 Automatically detect room boundaries from architectural blueprints
@@ -232,7 +232,7 @@ function App() {
       <footer className="mt-16 border-t border-neutral-200 bg-white">
         <div className="max-w-7xl mx-auto px-4 py-6">
           <p className="text-sm text-neutral-500 text-center">
-            roomdetection • AI-powered room detection • OpenCV + YOLO models
+            Room Detection • AI-powered room detection • OpenCV + YOLO models
           </p>
         </div>
       </footer>
